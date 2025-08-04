@@ -1,20 +1,23 @@
-name: molscribe
+name: MolScribe
 channels:
   - conda-forge
   - pytorch
   - nvidia
 dependencies:
+  - jupyter
   - python=3.9
   - pytorch
   - torchvision
-  - pytorch-cuda=12.1
   - rdkit
-  - pandas
+  - pandas>=1.4.0
+  - numpy>=1.22.0
   - matplotlib
   - tensorboardx
+  - tqdm
+  - seaborn
+  - scipy
   - pip
   - pip:
-      #- opencv-python==4.5.5.64
     - opencv-python>=4.5.5.64
     - transformers>=4.5.1
     - SmilesPE==0.0.3

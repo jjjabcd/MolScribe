@@ -27,6 +27,8 @@ from evaluate import SmilesEvaluator
 
 import warnings
 warnings.filterwarnings('ignore')
+warnings.filterwarnings('ignore', category=FutureWarning)
+warnings.filterwarnings('ignore', category=UserWarning)
 
 
 def get_args():
@@ -98,6 +100,7 @@ def get_args():
     parser.add_argument('--save_mode', type=str, default='best', choices=['best', 'all', 'last'])
     parser.add_argument('--load_ckpt', type=str, default='best')
     parser.add_argument('--resume', action='store_true')
+    parser.add_argument('--finetune_resume', action='store_false')
     parser.add_argument('--all_data', action='store_true', help='Use both train and valid data for training.')
     parser.add_argument('--init_scheduler', action='store_true')
     parser.add_argument('--label_smoothing', type=float, default=0.0)
@@ -475,24 +478,16 @@ def inference(args, data_df, tokenizer, encoder=None, decoder=None, save_path=No
             pred_df['post_SMILES'] = keep_main_molecule(pred_df['post_SMILES'])
 
     # Compute scores
+    tanimoto_score = None
     if 'SMILES' in data_df.columns:
         evaluator = SmilesEvaluator(data_df['SMILES'], tanimoto=True)
         print('label:', data_df['SMILES'].values[:2])
         if 'SMILES' in pred_df.columns:
             print('pred:', pred_df['SMILES'].values[:2])
-            scores.update(evaluator.evaluate(pred_df['SMILES']))
+            tanimoto_score = evaluator.evaluate(pred_df['SMILES'])['tanimoto']
         if 'post_SMILES' in pred_df.columns:
-            post_scores = evaluator.evaluate(pred_df['post_SMILES'])
-            scores['post_smiles'] = post_scores['canon_smiles']
-            scores['post_graph'] = post_scores['graph']
-            scores['post_chiral'] = post_scores['chiral']
-            scores['post_tanimoto'] = post_scores['tanimoto']
-        if 'graph_SMILES' in pred_df.columns:
-            graph_scores = evaluator.evaluate(pred_df['graph_SMILES'])
-            scores['graph_smiles'] = graph_scores['canon_smiles']
-            scores['graph_graph'] = graph_scores['graph']
-            scores['graph_chiral'] = graph_scores['chiral']
-            scores['graph_tanimoto'] = graph_scores['tanimoto']
+            post_tanimoto = evaluator.evaluate(pred_df['post_SMILES'])['tanimoto']
+            tanimoto_score = round(post_tanimoto, 3)
 
     print('Save predictions...')
     file = data_df.attrs['file'].split('/')[-1]
@@ -500,12 +495,14 @@ def inference(args, data_df, tokenizer, encoder=None, decoder=None, save_path=No
     if args.predict_coords:
         pred_df = pred_df[['image_id', 'SMILES', 'node_coords']]
     pred_df.to_csv(os.path.join(save_path, f'prediction_{file}'), index=False)
-    # Save scores
-    if split == 'test':
+    
+    if tanimoto_score is not None:
         with open(os.path.join(save_path, f'eval_scores_{os.path.splitext(file)[0]}_{args.load_ckpt}.json'), 'w') as f:
-            json.dump(scores, f)
+            json.dump({'tanimoto': tanimoto_score}, f)
+        print(json.dumps({'tanimoto': tanimoto_score}, indent=4))
 
-    return scores
+    return {'tanimoto': tanimoto_score}
+
 
 
 def get_chemdraw_data(args):

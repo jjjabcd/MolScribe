@@ -93,6 +93,9 @@ def compute_tanimoto_similarities(gold_smiles, pred_smiles, num_workers=16):
         similarities = p.starmap(tanimoto_similarity, [(gs, ps) for gs, ps in zip(gold_smiles, pred_smiles)])
     return similarities
 
+def print_tanimoto_score_directly(scores):
+    print(scores.get('tanimoto', 'N/A'))
+
 
 class SmilesEvaluator(object):
     def __init__(self, gold_smiles, num_workers=16, tanimoto=False):
@@ -135,24 +138,34 @@ class SmilesEvaluator(object):
         return results
 
 
+
 if __name__ == "__main__":
     args = get_args()
     gold_df = pd.read_csv(args.gold_file)
     pred_df = pd.read_csv(args.pred_file)
 
+    pred_df['image_file'] = pred_df['image_file'].str.replace('.png', '', regex=False)
+    # pred_df에서 열 이름 변경
+    pred_df.rename(columns={'image_file': 'image_id', 'smiles': 'SMILES'}, inplace=True)
+
+    # gold_df와 pred_df의 길이를 비교
     if len(pred_df) != len(gold_df):
         print(f"Pred ({len(pred_df)}) and Gold ({len(gold_df)}) have different lengths!")
 
     # Re-order pred_df to have the same order with gold_df
     image2goldidx = {image_id: idx for idx, image_id in enumerate(gold_df['image_id'])}
     image2predidx = {image_id: idx for idx, image_id in enumerate(pred_df['image_id'])}
-    for image_id in gold_df['image_id']:
-        # If image_id doesn't exist in pred_df, add an empty prediction.
-        if image_id not in image2predidx:
-            pred_df = pred_df.append({'image_id': image_id, args.pred_field: ""}, ignore_index=True)
-    image2predidx = {image_id: idx for idx, image_id in enumerate(pred_df['image_id'])}
-    pred_df = pred_df.reindex([image2predidx[image_id] for image_id in gold_df['image_id']])
 
-    evaluator = SmilesEvaluator(gold_df['SMILES'], args.num_workers, args.tanimoto)
-    scores = evaluator.evaluate(pred_df[args.pred_field])
-    print(json.dumps(scores, indent=4))
+    # pred_df에 없는 image_id에 대한 빈 예측 추가
+    missing_ids = set(gold_df['image_id']) - set(pred_df['image_id'])
+    for image_id in missing_ids:
+        pred_df = pred_df.append({'image_id': image_id, 'SMILES': ""}, ignore_index=True)
+
+    # pred_df를 gold_df와 동일한 순서로 재배열
+    pred_df = pred_df.set_index('image_id').reindex(gold_df['image_id']).reset_index()
+
+    # SMILES 평가기 생성 및 평가 실행
+    evaluator = SmilesEvaluator(gold_df['SMILES'], num_workers=args.num_workers, tanimoto=args.tanimoto)
+    scores = evaluator.evaluate(pred_df['SMILES'])
+    print_tanimoto_score_directly(scores)
+

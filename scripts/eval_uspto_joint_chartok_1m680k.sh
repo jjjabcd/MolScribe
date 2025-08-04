@@ -5,7 +5,7 @@ NUM_GPUS_PER_NODE=1
 NODE_RANK=0
 MASTER_PORT=$(shuf -n 1 -i 10000-65535)
 
-BATCH_SIZE=64
+BATCH_SIZE=16
 
 LOAD_PATH=ckpts/swin_base_char_aux_1m680k.pth
 SAVE_PATH=output/uspto/swin_base_char_aux_1m680k/
@@ -15,7 +15,7 @@ set -x
 
 torchrun \
     --nproc_per_node=$NUM_GPUS_PER_NODE --nnodes=$NUM_NODES --node_rank $NODE_RANK --master_addr localhost --master_port $MASTER_PORT \
-    train.py \
+    custom_train.py \
     --data_path data \
     --test_file real/CLEF.csv,real/UOB.csv,real/USPTO.csv,real/staker.csv,real/acs.csv,synthetic/indigo.csv,synthetic/chemdraw.csv \
     --vocab_file molscribe/vocab/vocab_chars.json \
